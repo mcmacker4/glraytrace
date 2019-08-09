@@ -4,30 +4,37 @@ import com.mcmacker4.gl.*
 import java.util.Random
 import org.joml.*
 import org.lwjgl.glfw.GLFW.*
+import org.lwjgl.opengl.*
 import org.lwjgl.opengl.GL43.*
 import org.lwjgl.system.*
 import kotlin.math.*
 
 object Raytracer {
     
-    const val width = 1280
-    const val height = 720
+    private val samples = Vector2i(4, 4)
     
-    private val texture = GLTexture.create2D(width, height)
+    private val ssTexture = GLTexture.create2D(Window.width * samples.x, Window.height * samples.y)
+    private val avgTexture = GLTexture.create2D(Window.width, Window.height)
+    private val environment = GLTexture.load2D("environ.png")
 
-    private val computeShader = GLProgram.create(
-        GLShader.loadCompute("shader")
-    )
+    private val marcherShader = GLProgram.create(GLShader.loadCompute("marcher"))
+    private val averageShader = GLProgram.create(GLShader.loadCompute("average"))
 
-    private val workGroupSize = MemoryStack.stackPush().use {
+    private val marcherWorkGroupSize = MemoryStack.stackPush().use {
         val buff = it.mallocInt(3)
-        glGetProgramiv(computeShader.id, GL_COMPUTE_WORK_GROUP_SIZE, buff)
+        glGetProgramiv(marcherShader.id, GL_COMPUTE_WORK_GROUP_SIZE, buff)
+        Vector2i(buff.get(0), buff.get(1))
+    }
+    
+    private val averageWorkGroupSize = MemoryStack.stackPush().use {
+        val buff = it.mallocInt(3)
+        glGetProgramiv(averageShader.id, GL_COMPUTE_WORK_GROUP_SIZE, buff)
         Vector2i(buff.get(0), buff.get(1))
     }
     
     private val drawShader = GLProgram.create(
-        GLShader.loadVertex("shader"),
-        GLShader.loadFragment("shader")
+        GLShader.loadVertex("quad"),
+        GLShader.loadFragment("quad")
     )
     
     private val vao = VAO.create().apply {
@@ -46,7 +53,7 @@ object Raytracer {
     class Sphere(val position: Vector3f, val radius: Float, val color: Vector3f, val f: Float)
     class Camera(val position: Vector3f)
     
-    private val rand = Random(2)
+    private val rand = Random()
     private val spheres = (0 until 10).map {
         Sphere(
             Vector3f(rand.nextFloat() * 8f - 4f, rand.nextFloat() * 3 - 1.5f, -(rand.nextFloat() * 10 + 2)),
@@ -70,26 +77,42 @@ object Raytracer {
     
     fun render() {
         
-        computeShader.bind()
-        glBindImageTexture(0, texture.id, 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F)
-        computeShader.uniformVec3("camera.position", camera.position)
-        computeShader.uniform1f("camera.aspect", width.toFloat() / height)
+        marcherShader.bind()
+        glActiveTexture(GL_TEXTURE0)
+        glBindImageTexture(0, ssTexture.id, 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F)
+        glActiveTexture(GL_TEXTURE1)
+        environment.bind()
+        marcherShader.uniformVec3("camera.position", camera.position)
+        marcherShader.uniform1f("camera.aspect", Window.width.toFloat() / Window.height)
         spheres.forEachIndexed { i, sphere ->
             sphere.position.x = sin(glfwGetTime().toFloat() + sphere.f) * 4f
-            computeShader.uniformVec3("spheres[$i].position", sphere.position)
-            computeShader.uniform1f("spheres[$i].radius", sphere.radius)
-            computeShader.uniformVec3("spheres[$i].color", sphere.color)
+            marcherShader.uniformVec3("spheres[$i].position", sphere.position)
+            marcherShader.uniform1f("spheres[$i].radius", sphere.radius)
+            marcherShader.uniformVec3("spheres[$i].color", sphere.color)
         }
-        glDispatchCompute(nextPowerOfTwo(width) / workGroupSize.x(),  nextPowerOfTwo(height) / workGroupSize.y(), 1)
+        glDispatchCompute(nextPowerOfTwo(Window.width * samples.x) / marcherWorkGroupSize.x(),  nextPowerOfTwo(Window.height * samples.y) / marcherWorkGroupSize.y(), 1)
+        environment.unbind()
+        glActiveTexture(GL_TEXTURE0)
         glBindImageTexture(0, 0, 0, false, 0, GL_READ_WRITE, GL_RGBA32F)
         glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT)
-        computeShader.unbind()
+        marcherShader.unbind()
+        
+        averageShader.bind()
+        glBindImageTexture(0, ssTexture.id, 0, false, 0, GL_READ_ONLY, GL_RGBA32F)
+        glBindImageTexture(1, avgTexture.id, 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F)
+        averageShader.uniformVec2i("samples", samples)
+        glDispatchCompute(nextPowerOfTwo(Window.width) / averageWorkGroupSize.x(),  nextPowerOfTwo(Window.height) / averageWorkGroupSize.y(), 1)
+        glBindImageTexture(1, 0, 0, false, 0, GL_READ_WRITE, GL_RGBA32F)
+        glBindImageTexture(0, 0, 0, false, 0, GL_READ_WRITE, GL_RGBA32F)
+        glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT)
+        averageShader.unbind()
         
         drawShader.bind()
         vao.bind()
-        texture.bind()
+        glActiveTexture(GL_TEXTURE0)
+        avgTexture.bind()
         glDrawArrays(GL_TRIANGLES, 0, 6)
-        texture.unbind()
+        avgTexture.unbind()
         vao.unbind()
         drawShader.unbind()
         

@@ -2,8 +2,7 @@ package com.mcmacker4.gl
 
 import com.mcmacker4.exceptions.ShaderLinkException
 import com.mcmacker4.exceptions.ShaderValidateException
-import org.joml.Vector2fc
-import org.joml.Vector3fc
+import org.joml.*
 import org.lwjgl.opengl.GL11.GL_FALSE
 import org.lwjgl.opengl.GL20.*
 import java.nio.FloatBuffer
@@ -26,6 +25,11 @@ class GLProgram private constructor(id: Int) : GLObject(id) {
     fun uniformVec2(name: String, v: Vector2fc) {
         val loc = getUniformLocation(name).takeIf { it != -1 } ?: return
         glUniform2f(loc, v.x(), v.y())
+    }
+    
+    fun uniformVec2i(name: String, v: Vector2ic) {
+        val loc = getUniformLocation(name).takeIf { it != -1 } ?: return
+        glUniform2i(loc, v.x(), v.y())
     }
     
     fun uniformVec3(name: String, v: Vector3fc) {

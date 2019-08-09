@@ -9,19 +9,30 @@ fun main() {
     
     GLFWErrorCallback.createPrint(System.err).set()
     
-    if (!glfwInit())
-        throw IllegalStateException("Could not initialize GLFW.")
-    
-    val window = Window(Raytracer.width, Raytracer.height)
+    Window
     
     glClearColor(0.3f, 0.6f, 0.9f, 1.0f)
     
-    while (!window.shouldClose()) {
+    var last = glfwGetTime()
+    var count = 0
+    
+    while (!Window.shouldClose()) {
+        
+        val now = glfwGetTime()
+        if (now - last > 1) {
+            println(count)
+            count = 0
+            last = now
+        }
+        
         glfwPollEvents()
         Raytracer.render()
-        window.update()
+        Window.update()
+        
+        count++
+        
     }
     
-    window.destroy()
+    Window.destroy()
     
 }

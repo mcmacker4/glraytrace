@@ -9,13 +9,19 @@ import org.lwjgl.system.MemoryUtil.NULL
 import java.lang.RuntimeException
 
 
-class Window(width: Int, height: Int) {
+object Window {
+
+    const val width = 1280
+    const val height = 720
     
     private val glfwWindow: Long
     
     private val debugProc: Callback?
     
     init {
+        if (!glfwInit())
+            throw IllegalStateException("Could not initialize GLFW.")
+        
         glfwDefaultWindowHints()
         glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE)
         glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE)
@@ -32,18 +38,17 @@ class Window(width: Int, height: Int) {
         if (glfwWindow == NULL)
             throw RuntimeException("Could not create GLFW window.")
         
-        glfwGetVideoMode(glfwGetPrimaryMonitor())?.let { vidmode ->
-            glfwSetWindowPos(
-                glfwWindow,
-                (vidmode.width() - width) / 2,
-                (vidmode.height() - height) / 2
-            )
+        glfwSetKeyCallback(glfwWindow) { _, key, _, action, _ ->
+            if (key == GLFW_KEY_ESCAPE && action == GLFW_RELEASE)
+                glfwSetWindowShouldClose(glfwWindow, true)
         }
         
         glfwMakeContextCurrent(glfwWindow)
         GL.createCapabilities()
         
         debugProc = GLUtil.setupDebugMessageCallback()
+
+        glfwSwapInterval(0)
         
         println(glGetString(GL_VENDOR))
         println(glGetString(GL_VERSION))
