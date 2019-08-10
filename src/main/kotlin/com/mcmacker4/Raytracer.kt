@@ -4,14 +4,13 @@ import com.mcmacker4.gl.*
 import java.util.Random
 import org.joml.*
 import org.lwjgl.glfw.GLFW.*
-import org.lwjgl.opengl.*
 import org.lwjgl.opengl.GL43.*
 import org.lwjgl.system.*
 import kotlin.math.*
 
 object Raytracer {
     
-    private val samples = Vector2i(4, 4)
+    private val samples = Vector2i(2, 2)
     
     private val ssTexture = GLTexture.create2D(Window.width * samples.x, Window.height * samples.y)
     private val avgTexture = GLTexture.create2D(Window.width, Window.height)
@@ -51,19 +50,19 @@ object Raytracer {
     }
     
     class Sphere(val position: Vector3f, val radius: Float, val color: Vector3f, val f: Float)
-    class Camera(val position: Vector3f)
     
     private val rand = Random()
     private val spheres = (0 until 10).map {
         Sphere(
             Vector3f(rand.nextFloat() * 8f - 4f, rand.nextFloat() * 3 - 1.5f, -(rand.nextFloat() * 10 + 2)),
             rand.nextFloat() * 0.5f + 0.5f,
-            Vector3f(rand.nextFloat() * 0.7f + 0.3f, rand.nextFloat() * 0.7f + 0.3f, rand.nextFloat() * 0.7f + 0.3f),
+            //Vector3f(rand.nextFloat() * 0.7f + 0.3f, rand.nextFloat() * 0.7f + 0.3f, rand.nextFloat() * 0.7f + 0.3f),
+            Vector3f(1f),
             rand.nextFloat() * 4f
         )
     }
     
-    private val camera = Camera(Vector3f(0f))
+    private val camera = Camera(Vector3f(0f), Vector3f(0f))
     
     private fun nextPowerOfTwo(n: Int) : Int {
         var x = n - 1
@@ -75,7 +74,15 @@ object Raytracer {
         return x + 1
     }
     
+    private var lastTime = glfwGetTime()
+    
     fun render() {
+        
+        val now = glfwGetTime()
+        val delta = (now - lastTime).toFloat()
+        lastTime = now
+        
+        camera.update(delta)
         
         marcherShader.bind()
         glActiveTexture(GL_TEXTURE0)
@@ -83,9 +90,10 @@ object Raytracer {
         glActiveTexture(GL_TEXTURE1)
         environment.bind()
         marcherShader.uniformVec3("camera.position", camera.position)
+        marcherShader.uniformMatrix("camera.viewmatrix", camera.getViewMatrix())
         marcherShader.uniform1f("camera.aspect", Window.width.toFloat() / Window.height)
         spheres.forEachIndexed { i, sphere ->
-            sphere.position.x = sin(glfwGetTime().toFloat() + sphere.f) * 4f
+            //sphere.position.x = sin(glfwGetTime().toFloat() + sphere.f) * 4f
             marcherShader.uniformVec3("spheres[$i].position", sphere.position)
             marcherShader.uniform1f("spheres[$i].radius", sphere.radius)
             marcherShader.uniformVec3("spheres[$i].color", sphere.color)
@@ -106,6 +114,14 @@ object Raytracer {
         glBindImageTexture(0, 0, 0, false, 0, GL_READ_WRITE, GL_RGBA32F)
         glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT)
         averageShader.unbind()
+        
+//        val buffer = MemoryUtil.memAlloc(Window.width * Window.height * 4)
+//        glActiveTexture(GL_TEXTURE0)
+//        avgTexture.bind()
+//        glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer)
+//        STBImageWrite.stbi_flip_vertically_on_write(true)
+//        STBImageWrite.stbi_write_png("render.png", Window.width, Window.height, 4, buffer, Window.width * 4)
+//        MemoryUtil.memFree(buffer)
         
         drawShader.bind()
         vao.bind()

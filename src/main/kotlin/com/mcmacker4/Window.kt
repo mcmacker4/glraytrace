@@ -11,10 +11,10 @@ import java.lang.RuntimeException
 
 object Window {
 
-    const val width = 1280
-    const val height = 720
-    
-    private val glfwWindow: Long
+    const val width = 1600
+    const val height = 900
+
+    val glfwWindow: Long
     
     private val debugProc: Callback?
     
@@ -25,7 +25,6 @@ object Window {
         glfwDefaultWindowHints()
         glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE)
         glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE)
-        
         
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE)
         glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE)
@@ -38,10 +37,24 @@ object Window {
         if (glfwWindow == NULL)
             throw RuntimeException("Could not create GLFW window.")
         
+        glfwGetVideoMode(glfwGetPrimaryMonitor())?.let { vidmode ->
+            glfwSetWindowPos(
+                glfwWindow,
+                (vidmode.width() - width) / 2,
+                (vidmode.height() - height) / 2
+            )
+        }
+        
         glfwSetKeyCallback(glfwWindow) { _, key, _, action, _ ->
             if (key == GLFW_KEY_ESCAPE && action == GLFW_RELEASE)
-                glfwSetWindowShouldClose(glfwWindow, true)
+                close()
         }
+        
+        glfwSetCursorPosCallback(glfwWindow) { _, xpos, ypos ->  
+            Input.emitMouseEvent(xpos, ypos)
+        }
+        
+        glfwSetInputMode(glfwWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED)
         
         glfwMakeContextCurrent(glfwWindow)
         GL.createCapabilities()
@@ -68,5 +81,9 @@ object Window {
     fun shouldClose() : Boolean {
         return glfwWindowShouldClose(glfwWindow)
     }
-    
+
+    fun close() {
+        glfwSetWindowShouldClose(glfwWindow, true)
+    }
+
 }
